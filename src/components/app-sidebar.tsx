@@ -28,7 +28,7 @@ export function AppSidebar({
   ...props
 }: AppSidebarProps) {
   return (
-    <Sidebar {...props}>
+    <Sidebar {...props}  variant="floating">
       <SidebarHeader>
         <div className="p-2">
           <h3 className="text-sm font-medium text-sidebar-foreground mb-2">
