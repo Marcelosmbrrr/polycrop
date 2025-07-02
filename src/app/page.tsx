@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImagePlus, Scissors, Plus, Lock, Unlock, Hand, MoveDiagonal } from "lucide-react";
@@ -29,21 +29,13 @@ interface CroppedImage {
   width: number;
   height: number;
   vertices: { x: number; y: number }[];
+  rotation?: number; // graus
 }
 
-type MosaicTemplate = "fullscreen" | "quadrilateral" | "grid";
-
-interface GridPreset {
-  rows: number;
-  cols: number;
-}
-
-function parseGridPreset(preset: string): GridPreset {
-  const [cols, rows] = preset.split("x").map(Number);
-  return { cols, rows };
-}
+type MosaicTemplate = "fullscreen" | "quadrilateral";
 
 export default function Page() {
+  
   const [images, setImages] = useState<ImageData[]>([]);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [cropMode, setCropMode] = useState(false);
@@ -52,7 +44,6 @@ export default function Page() {
   const [isGeneratingForCrop, setIsGeneratingForCrop] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [mosaicTemplate, setMosaicTemplate] = useState<MosaicTemplate>("fullscreen");
-  const [gridPreset, setGridPreset] = useState<GridPreset | null>(null);
   const [quadRect, setQuadRect] = useState({ x: 100, y: 100, width: 300, height: 300 });
   const [isResizingQuad, setIsResizingQuad] = useState(false);
   const [resizeStart, setResizeStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
@@ -66,12 +57,8 @@ export default function Page() {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0, mouseX: 0, mouseY: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
-  const [gridRect, setGridRect] = useState({ x: 100, y: 100, width: 400, height: 400 });
-  const [isResizingGrid, setIsResizingGrid] = useState(false);
-  const [resizeGridStart, setResizeGridStart] = useState({ mouseX: 0, mouseY: 0, width: 0, height: 0 });
-  const [isDraggingGrid, setIsDraggingGrid] = useState(false);
-  const [dragGridStart, setDragGridStart] = useState({ mouseX: 0, mouseY: 0, x: 0, y: 0 });
-  const [gridLocked, setGridLocked] = useState(false);
+  const [gridDivisions, setGridDivisions] = useState<0 | 2 | 4 | 6 | 8>(0);
+  const [rotatingIds, setRotatingIds] = useState<string[]>([]);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -101,40 +88,6 @@ export default function Page() {
     setCroppedImages([]);
     setIsGeneratingForCrop(false);
     setMosaicTemplate(template);
-    if (template === "grid" && preset) {
-      const grid = parseGridPreset(preset);
-      setGridPreset(grid);
-      const gridWidth = 400;
-      const gridHeight = 400;
-      setGridRect({ x: 100, y: 100, width: gridWidth, height: gridHeight });
-      const cellWidth = gridWidth / grid.cols;
-      const cellHeight = gridHeight / grid.rows;
-      const cropped: CroppedImage[] = [];
-      let id = 1;
-      for (let row = 0; row < grid.rows; row++) {
-        for (let col = 0; col < grid.cols; col++) {
-          const x = gridRect.x + col * cellWidth;
-          const y = gridRect.y + row * cellHeight;
-          cropped.push({
-            id: `grid-${id++}`,
-            url: "",
-            x,
-            y,
-            width: cellWidth,
-            height: cellHeight,
-            vertices: [
-              { x: 0, y: 0 },
-              { x: cellWidth, y: 0 },
-              { x: cellWidth, y: cellHeight },
-              { x: 0, y: cellHeight },
-            ],
-          });
-        }
-      }
-      setCroppedImages(cropped);
-    } else {
-      setGridPreset(null);
-    }
     setTemplateDialogOpen(false);
   };
 
@@ -158,6 +111,7 @@ export default function Page() {
         { x: 200, y: 150 },
         { x: 0, y: 150 },
       ],
+      rotation: 0,
     };
     setCroppedImages((prev) => [...prev, newCroppedImage]);
     setCropMode(false);
@@ -290,6 +244,12 @@ export default function Page() {
 
     // Toast de sucesso
     toast.success("Imagem gerada com sucesso!");
+
+    let pdfWidth = quadRect.width;
+    let pdfHeight = quadRect.height;
+    const pdf = new jsPDF({ orientation: pdfWidth > pdfHeight ? 'l' : 'p', unit: 'px', format: [pdfWidth, pdfHeight] });
+    pdf.addImage(dataURL, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`mosaico-${Date.now()}.pdf`);
   };
 
   const generateImageForCrop = async () => {
@@ -485,36 +445,6 @@ export default function Page() {
     return canvas.toDataURL("image/png", 1.0);
   };
 
-  // Atualizar todas as células do grid ao mover/redimensionar o grid
-  const updateGridCells = (rect: { x: number; y: number; width: number; height: number }) => {
-    if (!gridPreset) return;
-    const cellWidth = rect.width / gridPreset.cols;
-    const cellHeight = rect.height / gridPreset.rows;
-    let id = 1;
-    const cropped: CroppedImage[] = [];
-    for (let row = 0; row < gridPreset.rows; row++) {
-      for (let col = 0; col < gridPreset.cols; col++) {
-        const x = rect.x + col * cellWidth;
-        const y = rect.y + row * cellHeight;
-        cropped.push({
-          id: `grid-${id++}`,
-          url: croppedImages[(row * gridPreset.cols) + col]?.url || "",
-          x,
-          y,
-          width: cellWidth,
-          height: cellHeight,
-          vertices: [
-            { x: 0, y: 0 },
-            { x: cellWidth, y: 0 },
-            { x: cellWidth, y: cellHeight },
-            { x: 0, y: cellHeight },
-          ],
-        });
-      }
-    }
-    setCroppedImages(cropped);
-  };
-
   return (
     <SidebarProvider>
       <AppSidebar
@@ -530,9 +460,31 @@ export default function Page() {
         />
         <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 bg-background">
           <div className="flex items-center gap-2">
-            <Button
+            <SidebarTrigger />
+          </div>
+          <div className="flex items-center gap-2">
+            
+            <Input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+          {selectedImageId && images.some(img => img.id === selectedImageId) && (
+              <Button
+                onClick={handleCropClick}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Scissors className="h-4 w-4" />
+                Recortar
+              </Button>
+            )}
+          <Button
               onClick={openTemplateDialog}
-              variant="outline"
               className="flex items-center gap-2"
             >
               <Plus className="h-4 w-4" />
@@ -543,33 +495,16 @@ export default function Page() {
               className="flex items-center gap-2"
             >
               <ImagePlus className="h-4 w-4" />
-              Adicionar Imagem
+              Imagem
             </Button>
-            {selectedImageId && (
-              <Button
-                onClick={handleCropClick}
-                variant="secondary"
-                className="flex items-center gap-2"
-              >
-                <Scissors className="h-4 w-4" />
-                Recortar
-              </Button>
-            )}
-            <Input
-              id="image-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-          </div>
-
           <GenerateImageDialog
             generateImage={generateImage}
             exportPDF={exportPDF}
             getPreviewDataUrl={getPreviewDataUrl}
                 disabled={croppedImages.length === 0}
           />
+          </div>
+          
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-4">
@@ -589,6 +524,8 @@ export default function Page() {
                 setIsPanning(true);
                 setPanStart({ x: pan.x, y: pan.y, mouseX: e.clientX, mouseY: e.clientY });
                 e.preventDefault();
+              } else if (e.target === containerRef.current) {
+                setSelectedImageId(null);
               }
             }}
             onMouseMove={e => {
@@ -605,7 +542,6 @@ export default function Page() {
             onKeyUp={e => { if (e.code === 'Space') setSpacePressed(false); }}
             style={{ outline: 'none', cursor: isPanning || spacePressed ? 'grab' : undefined }}
           >
-            {/* Grid visual no fundo do container */}
             <GridBackground containerRef={containerRef} zoom={zoom} pan={pan} />
             <div
               style={{
@@ -640,19 +576,110 @@ export default function Page() {
                     style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
                   >
                     {viewportShape === "quadrilateral" && (
-                      <rect x={0} y={0} width={quadRect.width} height={quadRect.height} rx={8} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                      <g>
+                        <rect x={0} y={0} width={quadRect.width} height={quadRect.height} rx={8} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                        {/* Linhas internas do grid quadrilátero */}
+                        {gridDivisions > 0 && Array.from({ length: gridDivisions - 1 }).map((_, i) => {
+                          const frac = (i + 1) / gridDivisions;
+                          return (
+                            <g key={i}>
+                              {/* Linhas verticais */}
+                              <line x1={quadRect.width * frac} y1={0} x2={quadRect.width * frac} y2={quadRect.height} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />
+                              {/* Linhas horizontais */}
+                              <line x1={0} y1={quadRect.height * frac} x2={quadRect.width} y2={quadRect.height * frac} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />
+                            </g>
+                          );
+                        })}
+                      </g>
                     )}
                     {viewportShape === "triangle" && (
-                      <polygon points={getRegularPolygonPoints(3, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                      <g>
+                        <polygon points={getRegularPolygonPoints(3, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                        {/* Linhas internas do grid triângulo */}
+                        {gridDivisions > 0 && (() => {
+                          // Pega os vértices do triângulo
+                          const pts = getRegularPolygonPointsArr(3, quadRect.width, quadRect.height);
+                          // Linhas paralelas à base (do lado 0-1)
+                          return Array.from({ length: gridDivisions - 1 }).map((_, i) => {
+                            const frac = (i + 1) / gridDivisions;
+                            // Interpola entre o vértice 2 (topo) e os lados 0-1
+                            const left = {
+                              x: pts[2][0] + frac * (pts[0][0] - pts[2][0]),
+                              y: pts[2][1] + frac * (pts[0][1] - pts[2][1]),
+                            };
+                            const right = {
+                              x: pts[2][0] + frac * (pts[1][0] - pts[2][0]),
+                              y: pts[2][1] + frac * (pts[1][1] - pts[2][1]),
+                            };
+                            return <line key={i} x1={left.x} y1={left.y} x2={right.x} y2={right.y} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />;
+                          });
+                        })()}
+                      </g>
                     )}
                     {viewportShape === "pentagon" && (
-                      <polygon points={getRegularPolygonPoints(5, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                      <g>
+                        <polygon points={getRegularPolygonPoints(5, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                        {/* Linhas internas do grid pentágono */}
+                        {gridDivisions > 0 && (() => {
+                          const pts = getRegularPolygonPointsArr(5, quadRect.width, quadRect.height);
+                          // Linhas conectando lados opostos (aproximação)
+                          return Array.from({ length: gridDivisions - 1 }).map((_, i) => {
+                            const frac = (i + 1) / gridDivisions;
+                            // Interpolar entre centro e cada vértice
+                            const cx = quadRect.width / 2;
+                            const cy = quadRect.height / 2;
+                            return pts.map((pt, idx) => {
+                              const x = cx + frac * (pt[0] - cx);
+                              const y = cy + frac * (pt[1] - cy);
+                              // Próximo ponto (para formar "anéis")
+                              const nextPt = pts[(idx + 1) % pts.length];
+                              const x2 = cx + frac * (nextPt[0] - cx);
+                              const y2 = cy + frac * (nextPt[1] - cy);
+                              return <line key={idx + '-' + i} x1={x} y1={y} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />;
+                            });
+                          });
+                        })()}
+                      </g>
                     )}
                     {viewportShape === "hexagon" && (
-                      <polygon points={getRegularPolygonPoints(6, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                      <g>
+                        <polygon points={getRegularPolygonPoints(6, quadRect.width, quadRect.height)} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                        {/* Linhas internas do grid hexágono */}
+                        {gridDivisions > 0 && (() => {
+                          const pts = getRegularPolygonPointsArr(6, quadRect.width, quadRect.height);
+                          // Linhas "anéis" internos
+                          return Array.from({ length: gridDivisions - 1 }).map((_, i) => {
+                            const frac = (i + 1) / gridDivisions;
+                            const cx = quadRect.width / 2;
+                            const cy = quadRect.height / 2;
+                            return pts.map((pt, idx) => {
+                              const x = cx + frac * (pt[0] - cx);
+                              const y = cy + frac * (pt[1] - cy);
+                              const nextPt = pts[(idx + 1) % pts.length];
+                              const x2 = cx + frac * (nextPt[0] - cx);
+                              const y2 = cy + frac * (nextPt[1] - cy);
+                              return <line key={idx + '-' + i} x1={x} y1={y} x2={x2} y2={y2} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />;
+                            });
+                          });
+                        })()}
+                      </g>
                     )}
                     {viewportShape === "circle" && (
-                      <ellipse cx={quadRect.width/2} cy={quadRect.height/2} rx={quadRect.width/2-8} ry={quadRect.height/2-8} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                      <g>
+                        <ellipse cx={quadRect.width/2} cy={quadRect.height/2} rx={quadRect.width/2-8} ry={quadRect.height/2-8} fill="none" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 4" />
+                        {/* Linhas internas do grid círculo (radiais) */}
+                        {gridDivisions > 0 && Array.from({ length: gridDivisions }).map((_, i) => {
+                          const angle = (2 * Math.PI * i) / gridDivisions;
+                          const cx = quadRect.width / 2;
+                          const cy = quadRect.height / 2;
+                          const rx = quadRect.width / 2 - 8;
+                          const ry = quadRect.height / 2 - 8;
+                          // Ponto na borda elíptica
+                          const x = cx + rx * Math.cos(angle);
+                          const y = cy + ry * Math.sin(angle);
+                          return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#3b82f6" strokeWidth={1} strokeDasharray="2 2" />;
+                        })}
+                      </g>
                     )}
                   </svg>
                   {/* Botões horizontais no topo direito */}
@@ -667,6 +694,32 @@ export default function Page() {
                       zIndex: 30,
                     }}
                   >
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        style={{ background: '#fff', pointerEvents: 'auto', border: '1px solid #bfdbfe', boxShadow: '0 2px 8px 0 rgba(59,130,246,0.08)' }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          setGridDivisions(prev => {
+                            if (prev === 0) return 2;
+                            if (prev === 2) return 4;
+                            if (prev === 4) return 6;
+                            if (prev === 6) return 8;
+                            return 0;
+                          });
+                        }}
+                        title="Mostrar/ocultar grid"
+                      >
+                        {/* Ícone de grid simples */}
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="3" y="3" width="14" height="14" rx="2" stroke="#3b82f6" strokeWidth="2"/>
+                          <line x1="3" y1="8" x2="17" y2="8" stroke="#3b82f6" strokeWidth="1.5"/>
+                          <line x1="3" y1="12" x2="17" y2="12" stroke="#3b82f6" strokeWidth="1.5"/>
+                          <line x1="8" y1="3" x2="8" y2="17" stroke="#3b82f6" strokeWidth="1.5"/>
+                          <line x1="12" y1="3" x2="12" y2="17" stroke="#3b82f6" strokeWidth="1.5"/>
+                        </svg>
+                      </Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -774,124 +827,24 @@ export default function Page() {
                 isGeneratingForCrop={isGeneratingForCrop}
               />
             ) : (
-              <>
-                  {mosaicTemplate === "grid" && gridPreset && (
-                    <>
-                      {/* Container do grid com handles, cadeado e linhas internas */}
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: gridRect.x,
-                          top: gridRect.y,
-                          width: gridRect.width,
-                          height: gridRect.height,
-                          zIndex: 10,
-                          boxSizing: "border-box",
-                          pointerEvents: "auto",
-                          border: "2px dashed #3b82f6",
-                          borderRadius: 8,
-                          background: "transparent"
-                        }}
-                      >
-                        {/* Linhas internas do grid */}
-                        <svg
-                          width={gridRect.width}
-                          height={gridRect.height}
-                          style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
-                        >
-                          {/* Linhas verticais */}
-                          {Array.from({ length: gridPreset.cols - 1 }).map((_, i) => (
-                            <line
-                              key={"v-" + i}
-                              x1={((i + 1) * gridRect.width) / gridPreset.cols}
-                              y1={0}
-                              x2={((i + 1) * gridRect.width) / gridPreset.cols}
-                              y2={gridRect.height}
-                              stroke="#3b82f6"
-                              strokeDasharray="6 4"
-                              strokeWidth={1}
-                            />
-                          ))}
-                          {/* Linhas horizontais */}
-                          {Array.from({ length: gridPreset.rows - 1 }).map((_, i) => (
-                            <line
-                              key={"h-" + i}
-                              x1={0}
-                              y1={((i + 1) * gridRect.height) / gridPreset.rows}
-                              x2={gridRect.width}
-                              y2={((i + 1) * gridRect.height) / gridPreset.rows}
-                              stroke="#3b82f6"
-                              strokeDasharray="6 4"
-                              strokeWidth={1}
-  />
-))}
-                        </svg>
-                        {/* Botões horizontais no topo direito */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: -48,
-                            right: 0,
-                            display: "flex",
-                            flexDirection: "row",
-                            gap: 8,
-                            zIndex: 30,
-                          }}
-                        >
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            style={{ background: '#fff', pointerEvents: 'auto', border: '1px solid #bfdbfe', boxShadow: '0 2px 8px 0 rgba(59,130,246,0.08)' }}
-                            onClick={e => {
-                              e.stopPropagation();
-                              setGridLocked((locked) => !locked);
-                            }}
-                            title={gridLocked ? "Desbloquear redimensionamento" : "Bloquear redimensionamento"}
-                          >
-                            {gridLocked ? <Lock className="w-5 h-5 text-blue-600" /> : <Unlock className="w-5 h-5 text-blue-600" />}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            style={{ background: '#fff', cursor: isDraggingGrid ? 'grabbing' : 'grab', pointerEvents: 'auto', border: '1px solid #bfdbfe', boxShadow: '0 2px 8px 0 rgba(59,130,246,0.08)' }}
-                            onMouseDown={e => {
-                              if (gridLocked) return;
-                              if (e.button === 0) {
-                                setIsDraggingGrid(true);
-                                setDragGridStart({ mouseX: e.clientX, mouseY: e.clientY, x: gridRect.x, y: gridRect.y });
-                              }
-                            }}
-                            title="Mover grid"
-                          >
-                            <Hand className="w-5 h-5 text-blue-600" />
-                          </Button>
-                        </div>
-                        {/* Handle de resize no rodapé */}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          style={{ position: "absolute", bottom: 0, left: "100%", marginLeft: 12, background: '#fff', pointerEvents: 'auto', border: '1px solid #bfdbfe', boxShadow: '0 2px 8px 0 rgba(59,130,246,0.08)' }}
-                          onMouseDown={e => {
-                            if (gridLocked) return;
-                            if (e.button === 0) {
-                              setIsResizingGrid(true);
-                              setResizeGridStart({ mouseX: e.clientX, mouseY: e.clientY, width: gridRect.width, height: gridRect.height });
-                            }
-                          }}
-                          title="Redimensionar grid"
-                        >
-                          <MoveDiagonal className="w-5 h-5 text-blue-600" />
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
+              // Renderizar recortes no container principal (sem grid)
+              !cropMode && croppedImages.map(cropped => (
+                <PolygonImage
+                  key={cropped.id}
+                  croppedImage={cropped}
+                  croppedImages={croppedImages}
+                  isSelected={cropped.id === selectedImageId}
+                  onSelect={() => setSelectedImageId(cropped.id)}
+                  onDeselect={() => setSelectedImageId(null)}
+                  isRotatingMode={rotatingIds.includes(cropped.id)}
+                  onToggleRotate={v => setRotatingIds(ids => v ? [...ids, cropped.id] : ids.filter(id => id !== cropped.id))}
+                  onUpdate={updates => setCroppedImages(prev => prev.map(img => img.id === cropped.id ? { ...img, ...updates } : img))}
+                  onDelete={() => setCroppedImages(prev => prev.filter(img => img.id !== cropped.id))}
+                />
+              ))
+            )}
             </div>
-            {/* Eventos globais para resize/drag do quadrilátero ou grid */}
+            {/* Eventos globais para resize/drag do quadrilátero */}
             {mosaicTemplate === "quadrilateral" && !cropMode && (isResizingQuad || isDraggingQuad) && (
               <QuadRectEvents
                 isResizing={isResizingQuad}
@@ -916,36 +869,6 @@ export default function Page() {
                 }}
                 resizeStart={resizeStart}
                 dragStart={dragStart}
-              />
-            )}
-            {mosaicTemplate === "grid" && gridPreset && (isResizingGrid || isDraggingGrid) && (
-              <QuadRectEvents
-                isResizing={isResizingGrid}
-                isDragging={isDraggingGrid}
-                onResize={delta => {
-                  const newRect = {
-                    ...gridRect,
-                    width: Math.max(40, resizeGridStart.width + delta.x),
-                    height: Math.max(40, resizeGridStart.height + delta.y),
-                  };
-                  setGridRect(newRect);
-                  updateGridCells(newRect);
-                }}
-                onDrag={delta => {
-                  const newRect = {
-                    ...gridRect,
-                    x: dragGridStart.x + delta.x,
-                    y: dragGridStart.y + delta.y,
-                  };
-                  setGridRect(newRect);
-                  updateGridCells(newRect);
-                }}
-                onEnd={() => {
-                  setIsResizingGrid(false);
-                  setIsDraggingGrid(false);
-                }}
-                resizeStart={resizeGridStart}
-                dragStart={dragGridStart}
               />
             )}
           </div>

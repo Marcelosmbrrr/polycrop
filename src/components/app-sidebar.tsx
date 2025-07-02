@@ -8,6 +8,9 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { HelpDialog } from "@/components/help-dialog";
 
 interface ImageData {
   id: string;
@@ -27,13 +30,13 @@ export function AppSidebar({
   onImageSelect,
   ...props
 }: AppSidebarProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <Sidebar {...props}  variant="floating">
       <SidebarHeader>
         <div className="p-2">
-          <h3 className="text-sm font-medium text-sidebar-foreground mb-2">
-            Imagens ({images.length})
-          </h3>
+          <h2 className="text-xl font-bold text-sidebar-foreground mb-1"> 
+            PolyCrop <span className="text-sm text-sidebar-foreground">v0.1.0</span></h2>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -72,8 +75,15 @@ export function AppSidebar({
             </div>
           )}
         </div>
+        <div className="flex-1" />
+        <div className="p-2 mt-auto">
+          <Button variant="outline" className="w-full" onClick={() => setHelpOpen(true)}>
+            Ajuda
+          </Button>
+        </div>
       </SidebarContent>
       <SidebarRail />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </Sidebar>
   );
 }

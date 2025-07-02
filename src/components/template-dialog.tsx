@@ -55,34 +55,6 @@ export function TemplateDialog({ open, onOpenChange, onSelectTemplate }: Templat
             Polígono
             <span className="ml-2 text-xs text-muted-foreground">(Apenas o que estiver dentro do polígono)</span>
           </Button>
-          <Button
-            variant="outline"
-            className="justify-start"
-            onClick={() => setShowGridPresets((v) => !v)}
-            aria-label="Alternar exibição de Grid Preset"
-            role="button"
-            tabIndex={0}
-          >
-            Grid Preset
-            <span className="ml-2 text-xs text-muted-foreground">(Recortes vazios em grid)</span>
-          </Button>
-          {showGridPresets && (
-            <div className="flex flex-col gap-2 pl-4">
-              {gridPresets.map((preset) => (
-                <Button
-                  key={preset.value}
-                  variant="secondary"
-                  className="justify-start"
-                  onClick={() => onSelectTemplate("grid", preset.value)}
-                  aria-label={`Selecionar Grid Preset ${preset.label}`}
-                  role="button"
-                  tabIndex={0}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>

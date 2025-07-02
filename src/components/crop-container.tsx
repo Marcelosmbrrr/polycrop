@@ -164,14 +164,11 @@ export function CropContainer({
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 flex gap-2">
-        <Button onClick={onCancel} variant="outline" size="sm">
+      <div className="absolute bottom-4 right-4 flex gap-2">
+        <Button onClick={onCancel} variant="outline">
           <X className="h-4 w-4" />
           Cancelar
         </Button>
-      </div>
-
-      <div className="absolute bottom-4 right-4">
         <Button
           onClick={handleCropConfirm}
           className="flex items-center gap-2"
@@ -188,6 +185,7 @@ export function CropContainer({
             </>
           )}
         </Button>
+        
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
