@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 interface TemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelectTemplate: (template: "fullscreen" | "quadrilateral" | "grid", gridPreset?: string) => void;
+  onSelectTemplate: (template: "fullscreen" | "quadrilateral", gridPreset?: string) => void;
 }
 
 export function TemplateDialog({ open, onOpenChange, onSelectTemplate }: TemplateDialogProps) {
