@@ -12,6 +12,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"; // Verifique se o caminho está correto
 import { Trash2, Lock, Unlock, RotateCw } from "lucide-react";
+import { PiMouseLeftClickFill, PiMouseRightClickFill } from "react-icons/pi";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -441,7 +442,7 @@ export function PolygonImage({ croppedImage, onUpdate, onDelete, croppedImages, 
                 clipPath={`url(#clip-${croppedImage.id})`}
                 className="pointer-events-none"
                 preserveAspectRatio="none"
-                style={{ filter: !isSelected && isHovered ? 'brightness(0.6)' : undefined }}
+                style={{ filter: isHovered ? 'brightness(0.6)' : undefined }}
               />
 
               {/* Overlay de hover e ícone de clique */}
@@ -464,12 +465,31 @@ export function PolygonImage({ croppedImage, onUpdate, onDelete, croppedImages, 
                       fillOpacity={0.25}
                     />
                   )}
-                  {/* Ícone de clique (mão) centralizado */}
-                  <g style={{ pointerEvents: 'none' }}>
-                    <svg x={boundingWidth/2 - 16} y={boundingHeight/2 - 16} width="32" height="32" viewBox="0 0 24 24" fill="none">
-                      <path d="M7 11V7.5C7 6.11929 8.11929 5 9.5 5C10.3284 5 11 5.67157 11 6.5V11M11 11V6.5C11 5.67157 11.6716 5 12.5 5C13.3284 5 14 5.67157 14 6.5V11M14 11V8.5C14 7.67157 14.6716 7 15.5 7C16.3284 7 17 7.67157 17 8.5V14.5M17 14.5C17 16.9853 14.9853 19 12.5 19C10.0147 19 8 16.9853 8 14.5V11H11H14H17V14.5Z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </g>
+
+                </g>
+              )}
+
+              {/* Overlay de hover para itens selecionados - ícone de clique direito */}
+              {isSelected && isHovered && (
+                <g>
+                  {/* Overlay escuro */}
+                  {shapeType === "circle" ? (
+                    <ellipse
+                      cx={boundingWidth / 2}
+                      cy={boundingHeight / 2}
+                      rx={boundingWidth / 2}
+                      ry={boundingHeight / 2}
+                      fill="#000"
+                      fillOpacity={0.25}
+                    />
+                  ) : (
+                    <polygon
+                      points={polygonPoints}
+                      fill="#000"
+                      fillOpacity={0.25}
+                    />
+                  )}
+
                 </g>
               )}
 
@@ -511,6 +531,48 @@ export function PolygonImage({ croppedImage, onUpdate, onDelete, croppedImages, 
                 </>
               )}
             </svg>
+            
+            {/* Ícones de clique como elementos HTML separados */}
+            {!isSelected && isHovered && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 15,
+                }}
+              >
+                <PiMouseLeftClickFill size={24} color="#fff" />
+              </div>
+            )}
+            
+            {isSelected && isHovered && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  pointerEvents: 'none',
+                  zIndex: 15,
+                }}
+              >
+                <PiMouseRightClickFill size={24} color="#fff" />
+              </div>
+            )}
+            
             {/* Handle só aparece se não estiver bloqueado, estiver selecionado e não estiver em modo rotação */}
             {resizeMode === "size" && isSelected && !isLocked && (
               <div
